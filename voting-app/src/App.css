@@ -1,0 +1,172 @@
+/* Basic Reset / Box Sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont;
+  background-color: #f0f2f5;
+  color: #333;
+  justify-content: center;
+}
+
+.App {
+  max-width: 900px;
+  margin: 50px auto;
+  /* padding: 20px; */
+  background-color: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center; /* Center header content */
+  padding-bottom: 25px;
+}
+
+.App-header {
+  background-color: #130069; /* Darker purple/blue */
+  color: white;
+  padding: 100px;
+  border-radius: 20px 20px 0 0  ;
+  margin-bottom: 30px; /* Add space below header */
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 2em;
+}
+.App-voting{
+  padding: 0%;
+}
+
+.App-header button {
+  background-color: #0285ff; /* Lighter purple */
+  color: white;
+  border: none;
+  padding: 10px 20px; 
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 1em;
+  margin-top: 15px; /* Space between title and button */
+  transition: background-color 0.3s ease;
+  margin-top: 20px;
+}
+
+.App-header button:hover:not(:disabled) {
+  background-color: #020202; /* Even lighter on hover */
+}
+
+.App-header button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.account-address {
+  font-family: monospace;
+  font-size: 0.9em;
+  color: #f2e9e4; /* Light cream color */
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: inline-block; /* Prevent full width */
+  margin-top: 10px;
+}
+
+
+.App-main {
+   text-align: left; /* Align proposal list etc to left */
+   padding: 0 10px; /* Add some padding */
+}
+
+.App-main h2 {
+    text-align: center; /* Center the "Proposals" heading */
+    color: #4a4e69;
+    margin-bottom: 20px;
+}
+.App-main p{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px auto;
+
+}
+.proposals-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.proposals-list li {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+ .proposals-list li span {
+   flex-grow: 1; /* Allow text to take available space */
+   margin-right: 15px; /* Space between text and button */
+ }
+
+.vote-button {
+  background-color: #52b788; /* Green */
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease;
+}
+
+.vote-button:hover:not(:disabled) {
+  background-color: #40916c;
+}
+
+.vote-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.error-message {
+  color: #d00000; /* Red */
+  background-color: #ffccd5;
+  border: 1px solid #ffb3c1;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 15px 0;
+  text-align: center;
+}
+
+.info-message,.voted-message {
+   margin-top: 20px;
+   padding: 10px;
+   border-radius: 0px;
+   width: fit-content;
+   /* justify-content: center; */
+}
+.info-message {
+  text-align: center;
+  margin: 20px auto;
+  padding: 10px;
+  border-radius: 8px;
+  width: fit-content;
+  color: #ffffff;
+  background-color: #000000;
+}
+.voted-message {
+    color: #2d6a4f; /* Dark Green */
+    background-color: #d8f3dc;
+    font-weight: bold;
+}
+.refresh-button{
+  background-color: #2f5bc3;
+  justify-content: center;
+  align-items: center;
+  margin: 30px auto;
+  display: flex;
+
+}
