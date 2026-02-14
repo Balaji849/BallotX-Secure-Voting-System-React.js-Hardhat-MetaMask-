@@ -45,7 +45,7 @@ Traditional voting systems often face challenges regarding trust and security. *
 
 1.  **Clone the Repository**
     
-    git clone [https://github.com/Balaji/BallotX.git](https://github.com/Balaji/BallotX.git)
+    git clone [https://github.com/Balaji/BallotX.git]([https://github.com/Balaji/BallotX.git](https://github.com/Balaji849/BallotX-Secure-Voting-System-React.js-Hardhat-MetaMask-))
     ```bash
     cd BallotX
     ```
