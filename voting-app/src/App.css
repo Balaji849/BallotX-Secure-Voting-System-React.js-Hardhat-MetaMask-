@@ -1,3 +1,6 @@
+@import "tailwindcss";
+
+
 /* Basic Reset / Box Sizing */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -16,7 +19,6 @@ body {
   margin: 50px auto;
   /* padding: 20px; */
   background-color: #ffffff;
-  border-radius: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   text-align: center; /* Center header content */
   padding-bottom: 25px;
@@ -26,7 +28,6 @@ body {
   background-color: #130069; /* Darker purple/blue */
   color: white;
   padding: 100px;
-  border-radius: 20px 20px 0 0  ;
   margin-bottom: 30px; /* Add space below header */
 }
 
@@ -43,7 +44,6 @@ body {
   color: white;
   border: none;
   padding: 10px 20px; 
-  border-radius: 25px;
   cursor: pointer;
   font-size: 1em;
   margin-top: 15px; /* Space between title and button */

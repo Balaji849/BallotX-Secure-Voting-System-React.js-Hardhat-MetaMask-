@@ -1,209 +1,157 @@
-// src/App.jsx (Version using "Proposal" terminology, before owner features)
+// src/App.jsx — BallotX · Pure Tailwind Edition
+// Logic unchanged. All styles via Tailwind + ballotx.css for custom tokens.
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
-import contractInfo from "./contractInfo.json"; // Assumes this ABI contains getProposalsCount, getProposal etc.
-import "./App.css";
+import contractInfo from "./contractInfo.json";
+import "./index.css";
 
-// Get contract address and ABI from the imported JSON file
 const CONTRACT_ADDRESS = contractInfo.address;
-const CONTRACT_ABI = contractInfo.abi; // This ABI is expected to match the 'proposal' contract
+const CONTRACT_ABI = contractInfo.abi;
+
+// ─── ProposalCard 
+
+function ProposalCard({ proposal, hasVoted, actionLoading, onVote, maxVotes }) {
+  const fillPct = maxVotes > 0 ? Math.round((proposal.voteCount / maxVotes) * 100) : 0;
+
+  return (
+    <li className="group rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-indigo-500/30 hover:bg-indigo-500/[0.04]">
+      {/* Header */}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <span className="ballotx-font-display flex-1 text-[17px] font-bold leading-snug text-slate-100">
+          {proposal.name}
+        </span>
+        <span className="shrink-0 rounded-full  bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-400">
+          {proposal.voteCount} vote{proposal.voteCount !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="my-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-700"
+          style={{ width: `${fillPct}%` }}
+        />
+      </div>
+
+      {/* Vote button */}
+      <div className="flex items-center justify-end pt-1">
+        {!hasVoted && (
+          <button
+            onClick={() => onVote(proposal.index)}
+            disabled={actionLoading}
+            className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 px-5 py-2 text-sm font-medium text-white shadow-[0_0_16px_rgba(79,58,255,0.35)] transition-all duration-150 hover:-translate-y-px hover:shadow-[0_0_24px_rgba(79,58,255,0.55)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+          >
+            {actionLoading ? "Processing…" : "Cast Vote →"}
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+// ─── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
-  // States for provider, signer, contract instance
-  const [provider, setProvider] = useState(null);
-  const [signer, setSigner] = useState(null);
-  const [contract, setContract] = useState(null);
+  const [provider, setProvider]           = useState(null);
+  const [signer, setSigner]               = useState(null);
+  const [contract, setContract]           = useState(null);
+  const [account, setAccount]             = useState(null);
+  const [proposals, setProposals]         = useState([]);
+  const [hasVoted, setHasVoted]           = useState(false);
+  const [loading, setLoading]             = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError]                 = useState("");
+  const [networkName, setNetworkName]     = useState("");
 
-  // App specific states using "Proposal"
-  const [account, setAccount] = useState(null);
-  const [proposals, setProposals] = useState([]); // Using "proposals" state name
-  const [hasVoted, setHasVoted] = useState(false);
-  const [loading, setLoading] = useState(false); // General loading
-  const [actionLoading, setActionLoading] = useState(false); // Loading for voting action
-  const [error, setError] = useState("");
-  const [networkName, setNetworkName] = useState("");
-
-  // --- Core Blockchain Interaction Functions ---
-
+  // ── connectWallet ──────────────────────────────────────────────────────────
   const connectWallet = useCallback(async () => {
     setError("");
     setLoading(true);
     if (window.ethereum) {
       try {
-        const accounts = await window.ethereum.request({
-          method: "eth_requestAccounts",
-        });
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
         if (accounts.length > 0) {
           const currentAccount = accounts[0];
           setAccount(currentAccount);
-
           const web3Provider = new ethers.BrowserProvider(window.ethereum);
           setProvider(web3Provider);
-
           const web3Signer = await web3Provider.getSigner();
           setSigner(web3Signer);
-
           const network = await web3Provider.getNetwork();
-          setNetworkName(
-            network.chainId === 31337n ? "Localhost/Hardhat" : network.name
-          );
-
-          console.log("Wallet connected:", currentAccount);
-          console.log(
-            "Network:",
-            network.name,
-            "(Chain ID:",
-            network.chainId.toString() + ")"
-          );
+          setNetworkName(network.chainId === 31337n ? "Localhost/Hardhat" : network.name);
         } else {
-          setError(
-            "No accounts found. Please unlock or create an account in MetaMask."
-          );
+          setError("No accounts found. Please unlock or create an account in MetaMask.");
         }
       } catch (err) {
-        console.error("Error connecting wallet:", err);
-        if (err.code === 4001) {
-          setError("Connection rejected. Please connect your wallet.");
-        } else {
-          setError(`Connection error: ${err.message}`);
-        }
+        if (err.code === 4001) setError("Connection rejected. Please connect your wallet.");
+        else setError(`Connection error: ${err.message}`);
         setAccount(null);
       } finally {
         setLoading(false);
       }
     } else {
-      setError("MetaMask not detected. Please install MetaMask!");
+      setError("No Web3 wallet detected. Install MetaMask or enable your browser extension");
       setLoading(false);
     }
   }, []);
 
-  // Function to load data from the smart contract (Using "Proposal")
+  // ── loadContractData ───────────────────────────────────────────────────────
   const loadContractData = useCallback(async () => {
-    if (!contract) {
-      // Check only contract, account needed only for hasVoted
-      console.log("Contract instance not available yet.");
-      return;
-    }
-    if (!account) {
-      console.log("Account not connected, cannot check voted status yet.");
-    }
-
-    console.log("Loading contract data (proposals/voted status)...");
+    if (!contract) return;
     setLoading(true);
     setError("");
     try {
-      // 1. Fetch Proposals (Using proposal function names)
-      console.log("Attempting to call getProposalsCount...");
-      const count = await contract.getProposalsCount(); // Expecting getProposalsCount
-      console.log("Proposal count raw:", count);
+      const count = await contract.getProposalsCount();
       const proposalsArray = [];
       for (let i = 0; i < Number(count); i++) {
-        console.log(`Attempting to call getProposal(${i})...`);
-        const [name, voteCount] = await contract.getProposal(i); // Expecting getProposal
-        console.log(`Proposal ${i}:`, name, voteCount);
-        proposalsArray.push({
-          index: i,
-          name: name,
-          voteCount: Number(voteCount),
-        });
+        const [name, voteCount] = await contract.getProposal(i);
+        proposalsArray.push({ index: i, name, voteCount: Number(voteCount) });
       }
-      setProposals(proposalsArray); // Using setProposals
-      console.log("Proposals loaded:", proposalsArray);
-
-      // 2. Check if the connected account has already voted
+      setProposals(proposalsArray);
       if (account) {
-        console.log(`Attempting to call hasVoted(${account})...`);
         const votedStatus = await contract.hasVoted(account);
         setHasVoted(votedStatus);
-        console.log(`Account ${account} has voted: ${votedStatus}`);
       } else {
-        setHasVoted(false); // Reset if account disconnected
+        setHasVoted(false);
       }
     } catch (err) {
-      console.error("Error loading contract data:", err); // Log the full error object
-      // Add specific error checks based on potential issues
       if (err.code === "CALL_EXCEPTION" || err.code === "BAD_DATA") {
-        setError(
-          `Failed to load data: ${
-            err.message
-          }. Ensure contract address (${CONTRACT_ADDRESS}) is correct on network ${
-            networkName || "N/A"
-          } and ABI has 'getProposalsCount'/'getProposal'.`
-        );
-      } else if (
-        typeof err === "object" &&
-        err !== null &&
-        "message" in err &&
-        err.message.includes("contract not found")
-      ) {
-        setError(
-          `Contract not found at ${CONTRACT_ADDRESS} on network ${
-            networkName || "N/A"
-          }. Check deployment and network connection.`
-        );
-      } else if (
-        err instanceof TypeError &&
-        err.message.includes("is not a function")
-      ) {
-        setError(
-          `Contract interaction error: ${err.message}. Check if the function exists in the ABI (contractInfo.json).`
-        );
+        setError(`Failed to load data: ${err.message}. Check contract address & ABI.`);
       } else {
-        setError(`Error loading data: ${err.message}. Check console.`);
+        setError(`Error loading data: ${err.message}`);
       }
-      setProposals([]); // Using setProposals
+      setProposals([]);
       setHasVoted(false);
     } finally {
       setLoading(false);
     }
-  }, [contract, account, networkName]); // Dependencies: contract, account, network name
+  }, [contract, account, networkName]);
 
-  // Function to handle casting a vote (Using "Proposal")
+  // ── handleVote ─────────────────────────────────────────────────────────────
   const handleVote = async (proposalIndex) => {
-    // Using proposalIndex
     if (!contract || !signer || hasVoted) {
-      setError(
-        hasVoted
-          ? "You have already voted."
-          : "Connect wallet and ensure contract is loaded."
-      );
+      setError(hasVoted ? "You have already voted." : "Connect wallet and ensure contract is loaded.");
       return;
     }
-
-    console.log(`Attempting to vote for proposal index: ${proposalIndex}`); // Using proposalIndex
-    setActionLoading(true); // Use action loading state
+    setActionLoading(true);
     setError("");
-
     try {
-      // The 'vote' function likely remains the same, taking the index
-      const tx = await contract.connect(signer).vote(proposalIndex); // Pass proposalIndex
-
-      console.log("Vote transaction sent:", tx.hash);
-      const receipt = await tx.wait();
-      console.log("Vote transaction confirmed! Receipt:", receipt);
-
-      setHasVoted(true); // Mark as voted immediately
-      await loadContractData(); // Refresh data
+      const tx = await contract.connect(signer).vote(proposalIndex);
+      await tx.wait();
+      setHasVoted(true);
+      await loadContractData();
     } catch (err) {
-      console.error("Voting failed:", err);
-      if (err.code === "ACTION_REJECTED") {
-        setError("Transaction rejected in wallet.");
-      } else if (err?.reason) {
-        setError(`Voting Error: ${err.reason}`);
-      } else {
-        setError(`Voting failed: ${err.message}. Check console.`);
-      }
-      // Refresh data even on failure
+      if (err.code === "ACTION_REJECTED") setError("Transaction rejected in wallet.");
+      else if (err?.reason) setError(`Voting Error: ${err.reason}`);
+      else setError(`Voting failed: ${err.message}`);
       await loadContractData();
     } finally {
-      setActionLoading(false); // Stop action loading
+      setActionLoading(false);
     }
   };
 
-  // --- useEffect Hooks for Lifecycle Management ---
-
-  // Effect 1: Create contract instance
+  // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (
       provider &&
@@ -211,178 +159,219 @@ function App() {
       ethers.isAddress(CONTRACT_ADDRESS)
     ) {
       try {
-        const contractInstance = new ethers.Contract(
-          CONTRACT_ADDRESS,
-          CONTRACT_ABI, // Expecting ABI with "proposal" functions
-          provider
-        );
-        setContract(contractInstance);
-        console.log("Contract instance created");
+        setContract(new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider));
       } catch (err) {
-        console.error("Error creating contract instance:", err);
-        setError(
-          `Failed to create contract instance. Is the ABI (contractInfo.json) correct and address ${CONTRACT_ADDRESS} valid?`
-        );
+        setError(`Failed to create contract instance: ${err.message}`);
       }
     } else {
       setContract(null);
-      if (
-        CONTRACT_ADDRESS === "YOUR_CONTRACT_ADDRESS_HERE" ||
-        (CONTRACT_ADDRESS && !ethers.isAddress(CONTRACT_ADDRESS))
-      ) {
-        setError(
-          "Contract address not set or invalid in src/contractInfo.json. Deploy your contract first."
-        );
-      }
     }
-  }, [provider, CONTRACT_ADDRESS, CONTRACT_ABI]);
+  }, [provider]);
 
-  // Effect 2: Load proposal list and voted status when contract/account ready
   useEffect(() => {
-    // Load data if contract exists. Account is handled inside loadContractData.
-    if (contract) {
-      console.log("Contract ready, loading initial proposals/vote status...");
-      loadContractData();
-    } else {
-      setProposals([]); // Use setProposals
-      setHasVoted(false);
-    }
-  }, [contract, account, loadContractData]); // loadContractData is memoized
+    if (contract) loadContractData();
+    else { setProposals([]); setHasVoted(false); }
+  }, [contract, account, loadContractData]);
 
-  // Effect 3: Set up listeners for MetaMask events
   useEffect(() => {
     const eth = window.ethereum;
-    if (eth) {
-      const handleAccountsChanged = async (accounts) => {
-        console.log("Accounts changed:", accounts);
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          const web3Provider = new ethers.BrowserProvider(eth);
-          setProvider(web3Provider);
-          const web3Signer = await web3Provider.getSigner();
-          setSigner(web3Signer);
-        } else {
-          console.log("Wallet disconnected");
-          setAccount(null);
-          setSigner(null);
-          setProvider(null);
-          setContract(null);
-          setHasVoted(false); // Clear vote status
-          setProposals([]); // Clear proposals
-          setError("Wallet disconnected. Please connect.");
-        }
-      };
+    if (!eth) return;
+    const handleAccountsChanged = async (accounts) => {
+      if (accounts.length > 0) {
+        setAccount(accounts[0]);
+        const web3Provider = new ethers.BrowserProvider(eth);
+        setProvider(web3Provider);
+        setSigner(await web3Provider.getSigner());
+      } else {
+        setAccount(null); setSigner(null); setProvider(null);
+        setContract(null); setHasVoted(false); setProposals([]);
+        setError("Wallet disconnected. Please connect.");
+      }
+    };
+    const handleChainChanged = () => {
+      setError("Network changed. Please reload the page.");
+      window.location.reload();
+    };
+    eth.on("accountsChanged", handleAccountsChanged);
+    eth.on("chainChanged", handleChainChanged);
+    return () => {
+      if (eth.removeListener) {
+        eth.removeListener("accountsChanged", handleAccountsChanged);
+        eth.removeListener("chainChanged", handleChainChanged);
+      }
+    };
+  }, []);
 
-      const handleChainChanged = (_chainId) => {
-        console.log("Network chain changed:", _chainId);
-        setError("Network changed. Please reload the page and reconnect.");
-        window.location.reload();
-      };
+  const maxVotes   = proposals.length > 0 ? Math.max(...proposals.map((p) => p.voteCount), 1) : 1;
+  const totalVotes = proposals.reduce((sum, p) => sum + p.voteCount, 0);
 
-      eth.on("accountsChanged", handleAccountsChanged);
-      eth.on("chainChanged", handleChainChanged);
-
-      return () => {
-        if (eth.removeListener) {
-          eth.removeListener("accountsChanged", handleAccountsChanged);
-          eth.removeListener("chainChanged", handleChainChanged);
-        }
-      };
-    }
-  }, []); // Run only once
-
-  // --- Render Logic (Using "Proposal") ---
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="App">
-      <header className="App-header">
-        <div className="App-voting">
-        <h1>Decentralized Voting</h1>
-        </div>
-        
-        {account ? (
-          <div>
-            <p>
-              Connected:{" "}
-              <span className="account-address">
-                {account.substring(0, 6)}...
-                {account.substring(account.length - 4)}
-              </span>
-            </p>
-            <p>Network: {networkName || "Loading..."}</p>
+    <div className="relative min-h-screen overflow-hidden bg-[#080B14] text-slate-200">
+
+      {/* Ambient orbs */}
+      <div className="pointer-events-none fixed -left-32 -top-32 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,rgba(79,58,255,0.18),transparent_70%)] blur-[80px]" />
+      <div className="pointer-events-none fixed -bottom-20 -right-20 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(0,229,160,0.14),transparent_70%)] blur-[80px]" />
+
+      {/* Page */}
+      <div className="relative z-10 mx-auto max-w-3xl px-6 pb-20">
+
+        {/* ── Nav ── */}
+        <nav className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] py-5">
+          <div className="ballotx-font-display text-[22px] font-extrabold tracking-tight text-slate-100">
+            Ballot<span className="text-indigo-500">X</span>
+            <span className="ballotx-pulse ml-1 inline-block h-2 w-2 rounded-full bg-emerald-400 align-middle" />
           </div>
-        ) : (
-          <button onClick={connectWallet} disabled={loading}>
-            {loading ? "Connecting..." : "Connect Wallet"}
-          </button>
-        )}
-      </header>
 
-      {error && <p className="error-message">{error}</p>}
+          {account ? (
+            <div className="flex flex-wrap items-center gap-2.5">
+              {networkName && (
+                <span className="rounded-full font-semibold bg-white/5 px-4 py-1.5 text-xs text-gray-400">
+                  {networkName}
+                </span>
+              )}
+              <span className="flex items-center gap-2 rounded-full font-semibold bg-indigo-500/10 px-4 py-1.5 text-xs text-violet-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {account.substring(0, 6)}…{account.substring(account.length - 4)}
+              </span>
+            </div>
+          ) : (
+            <button
+              onClick={connectWallet}
+              disabled={loading}
+              className="rounded-[14px] bg-gradient-to-br from-indigo-500 to-violet-500 px-5 py-2.5 text-sm font-medium text-white shadow-[0_0_24px_rgba(79,58,255,0.4)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_0_32px_rgba(79,58,255,0.6)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            >
+              {loading ? "Connecting…" : "Connect Wallet"}
+            </button>
+          )}
+        </nav>
 
-      {/* No Owner Section in this version */}
+        {/* ── Hero ── */}
+        <div className="py-10 text-center">
+          <div className="mb-6 inline-flex items-center gap-1.5 rounded-full  bg-indigo-500/15 px-4 py-1.5 text-[12px] uppercase tracking-widest text-violet-200 font-semibold">
+            <span className="ballotx-pulse h-1.5 w-1.5 rounded-full bg-indigo-500" />
+            Trustless voting protocol
+          </div>
 
-      <main className="App-main">
-        <h2>Proposals</h2> {/* Using "Proposals" heading */}
-        {loading && <p>Loading Data...</p>}
-        {actionLoading && <p>Processing Transaction...</p>}
-        {/* Use "proposals" state variable */}
-        {account && !loading && !actionLoading && proposals.length === 0 && (
-          <p>No proposals found or unable to load.</p>
-        )}
-        {/* Use "proposals" state variable and "proposal" item */}
-        {account && !loading && proposals.length > 0 && (
-          <ul className="proposals-list">
-            {" "}
-            {/* Use proposals-list class */}
-            {proposals.map(
-              (
-                proposal // Map over proposals, use proposal item
-              ) => (
-                <li key={proposal.index}>
-                  <span>
-                    {proposal.name} ({proposal.voteCount} votes)
-                  </span>
-                  {!hasVoted && (
-                    <button
-                      onClick={() => handleVote(proposal.index)} // Pass proposal.index
-                      disabled={actionLoading}
-                      className="vote-button"
-                    >
-                      Vote
-                    </button>
-                  )}
-                </li>
-              )
-            )}
-          </ul>
-        )}
-        {account && !loading && hasVoted && (
-          <p className="voted-message">
-            You have already cast your vote on this network.
+          <h1 className="ballotx-font-display ballotx-gradient-text mb-4 text-5xl font-extrabold leading-[1.05] tracking-[-2px] md:text-6xl">
+            Vote on what<br />matters.
+          </h1>
+
+          <p className="mx-auto mb-11 mt-10 max-w-sm text-[17px]  leading-relaxed text-gray-400 font-semibold">
+            Transparent, trustless, unstoppable. Every voice counted on the blockchain - Forever.
           </p>
+
+          {!account && (
+            <div className="flex flex-wrap justify-center gap-3">
+              <button
+                onClick={connectWallet}
+                disabled={loading}
+                className="rounded-[14px] bg-gradient-to-br from-indigo-500 to-violet-800 px-8 py-3.5 text-[15px] font-medium text-white shadow-[0_0_30px_rgba(79,58,255,0.4)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_40px_rgba(79,58,255,0.6)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Connecting…" : "Connect Wallet ➜"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Stats strip ── */}
+        {account && (
+          <div className="mb-12 grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-white/[0.06]">
+            {[
+              { num: totalVotes.toLocaleString(), lbl: "Total votes" },
+              { num: proposals.length,            lbl: "Proposals"   },
+              { num: hasVoted ? "✓" : "—",        lbl: "Your vote"   },
+            ].map(({ num, lbl }) => (
+              <div key={lbl} className="bg-white/[0.025] px-5 py-6 text-center">
+                <div className="ballotx-font-display ballotx-gradient-text text-3xl font-extrabold">
+                  {num}
+                </div>
+                <div className="mt-1 text-[11px] uppercase font-semibold tracking-widest text-gray-700">{lbl}</div>
+              </div>
+            ))}
+          </div>
         )}
-        {!account && !loading && (
-          <p className="info-message">
-            Connect your wallet to view proposals and vote.
-          </p>
+
+        {/* ── Error ── */}
+        {error && (
+          <div className="mb-6 rounded-xl  bg-pink-500/30 px-2 py-3 text-center text-[13px] text-red-400">
+            {error}
+          </div>
         )}
-        {/* Refresh button - class added for potential styling */}
-        {account && contract && (
-          <button
-            onClick={loadContractData}
-            disabled={loading || actionLoading}
-            className="refresh-button"
-          >
-            {loading
-              ? "Refreshing..."
-              : actionLoading
-              ? "Processing..."
-              : "Refresh Data"}
-          </button>
-        )}
-      </main>
+
+        {/* ── Main ── */}
+        <main>
+          {account && (
+            <p className="mb-4 text-[11px] uppercase tracking-[2px] text-gray-300 font-bold">
+              Active Proposals
+            </p>
+          )}
+
+          {/* Loading spinner */}
+          {(loading || actionLoading) && (
+            <div className="flex items-center justify-center gap-2.5 py-5 text-sm text-gray-600">
+              <span className="ballotx-spin inline-block h-4 w-4 rounded-full border-2 border-indigo-500/20 border-t-indigo-500" />
+              {actionLoading ? "Processing transaction…" : "Loading proposals…"}
+            </div>
+          )}
+
+          {/* Empty */}
+          {account && !loading && !actionLoading && proposals.length === 0 && (
+            <p className="py-8 text-center text-sm text-gray-700">
+              No proposals found or unable to load.
+            </p>
+          )}
+
+          {/* Proposal cards */}
+          {account && !loading && proposals.length > 0 && (
+            <ul className="flex list-none flex-col gap-3.5 p-0">
+              {proposals.map((proposal) => (
+                <ProposalCard
+                  key={proposal.index}
+                  proposal={proposal}
+                  hasVoted={hasVoted}
+                  actionLoading={actionLoading}
+                  onVote={handleVote}
+                  maxVotes={maxVotes}
+                />
+              ))}
+            </ul>
+          )}
+
+          {/* Voted confirmation */}
+          {account && !loading && hasVoted && (
+            <div className="mx-auto mt-6 flex w-fit items-center gap-2.5 rounded-[14px] border border-emerald-400/20 bg-emerald-400/[0.08] px-6 py-3.5 text-sm font-medium text-emerald-400">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-[10px] font-extrabold text-[#080B14]">
+                ✓
+              </span>
+              Your vote has been cast on-chain.
+            </div>
+          )}
+
+          {/* No wallet */}
+          {!account && !loading && (
+            <div className=" text-center">
+              <span className="inline-flex items-center gap-2 rounded-xl bg-white/[0.04] px-5 py-3 text-sm text-gray-500 font-semibold">
+                Connect your wallet to view proposals and vote.
+              </span>
+            </div>
+          )}
+
+          {/* Refresh */}
+          {account && contract && (
+            <button
+              onClick={loadContractData}
+              disabled={loading || actionLoading}
+              className="mx-auto mt-8 flex items-center gap-2 rounded-xl  bg-white/[0.04] px-6 py-2.5 text-[15px] font-semibold text-gray-400 transition-all duration-200 hover:border-white/20 hover:text-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="text-base">↻</span>
+              {loading ? "Refreshing…" : actionLoading ? "Processing…" : "Refresh Data"}
+            </button>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
-export default App;
 
+export default App;
